@@ -1,24 +1,26 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { User, Session } from '@supabase/supabase-js';
 
-interface User {
+interface Profile {
   id: string;
   username: string;
   email: string;
-  avatar?: string;
+  avatar_url?: string;
   theme: string;
-  playlists: string[];
-  following: string[];
-  createdAt: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface UserContextType {
   user: User | null;
+  profile: Profile | null;
+  session: Session | null;
   isLoggedIn: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
-  signup: (username: string, email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  updateUser: (updates: Partial<User>) => void;
+  loading: boolean;
+  signOut: () => Promise<void>;
+  updateProfile: (updates: Partial<Profile>) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -33,79 +35,89 @@ export const useUser = () => {
 
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const currentUser = localStorage.getItem('bpsb-current');
-    if (currentUser) {
-      const users = JSON.parse(localStorage.getItem('bpsb-users') || '{}');
-      if (users[currentUser]) {
-        setUser(users[currentUser]);
-        setIsLoggedIn(true);
+    // Set up auth state listener first
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Fetch user profile
+          setTimeout(async () => {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (profileData) {
+              setProfile(profileData);
+            }
+          }, 0);
+        } else {
+          setProfile(null);
+        }
+        setLoading(false);
       }
-    }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        // Fetch user profile
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data: profileData }) => {
+            if (profileData) {
+              setProfile(profileData);
+            }
+          });
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
-    const users = JSON.parse(localStorage.getItem('bpsb-users') || '{}');
-    if (users[username] && users[username].password === password) {
-      setUser(users[username]);
-      setIsLoggedIn(true);
-      localStorage.setItem('bpsb-current', username);
-      return true;
-    }
-    return false;
+  const signOut = async () => {
+    await supabase.auth.signOut();
   };
 
-  const signup = async (username: string, email: string, password: string): Promise<boolean> => {
-    const users = JSON.parse(localStorage.getItem('bpsb-users') || '{}');
-    if (users[username]) {
-      return false; // User already exists
-    }
-    
-    const newUser: User = {
-      id: Date.now().toString(),
-      username,
-      email,
-      theme: 'system',
-      playlists: [],
-      following: [],
-      createdAt: new Date().toISOString()
-    };
-    
-    users[username] = { ...newUser, password };
-    localStorage.setItem('bpsb-users', JSON.stringify(users));
-    localStorage.setItem('bpsb-current', username);
-    setUser(newUser);
-    setIsLoggedIn(true);
-    return true;
-  };
-
-  const logout = () => {
-    setUser(null);
-    setIsLoggedIn(false);
-    localStorage.removeItem('bpsb-current');
-  };
-
-  const updateUser = (updates: Partial<User>) => {
+  const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return;
     
-    const updatedUser = { ...user, ...updates };
-    setUser(updatedUser);
-    
-    const users = JSON.parse(localStorage.getItem('bpsb-users') || '{}');
-    users[user.username] = { ...users[user.username], ...updates };
-    localStorage.setItem('bpsb-users', JSON.stringify(users));
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id);
+
+    if (!error && profile) {
+      setProfile({ ...profile, ...updates });
+    }
   };
+
+  const isLoggedIn = !!user;
 
   return (
     <UserContext.Provider value={{
       user,
+      profile,
+      session,
       isLoggedIn,
-      login,
-      signup,
-      logout,
-      updateUser
+      loading,
+      signOut,
+      updateProfile
     }}>
       {children}
     </UserContext.Provider>

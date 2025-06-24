@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Menu, X, Home, Search, Heart, Music, User, Settings, Plus } from 'lucide-react';
+import { Menu, X, Home, Search, Heart, Music, User, Settings, Plus, LogOut } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { SearchBar } from './SearchBar';
 
@@ -12,27 +12,26 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onSearch }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const { user, isLoggedIn } = useUser();
+  const { profile, signOut } = useUser();
 
   const menuItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'playlists', label: 'Your Library', icon: Music },
     { id: 'liked', label: 'Liked Songs', icon: Heart },
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'settings', label: 'Settings', icon: Settings }
   ];
-
-  if (isLoggedIn) {
-    menuItems.push(
-      { id: 'profile', label: 'Profile', icon: User },
-      { id: 'settings', label: 'Settings', icon: Settings }
-    );
-  }
 
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
   };
 
   return (
@@ -58,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onS
               benpstokerbeats
             </h1>
             <p className="text-white/70 text-sm">
-              {isLoggedIn ? `${getGreeting()}, ${user?.username}` : 'High-quality music, no ads'}
+              {profile ? `${getGreeting()}, ${profile.username}` : 'High-quality music, no ads'}
             </p>
           </div>
 
@@ -91,17 +90,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, onS
           </nav>
 
           {/* Create Playlist */}
-          {isLoggedIn && (
-            <div className="mt-6 pt-6 border-t border-white/20">
-              <button className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all">
-                <Plus size={20} />
-                <span className="font-medium">Create Playlist</span>
-              </button>
-            </div>
-          )}
+          <div className="mt-6 pt-6 border-t border-white/20">
+            <button className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all">
+              <Plus size={20} />
+              <span className="font-medium">Create Playlist</span>
+            </button>
+          </div>
+
+          {/* Sign Out */}
+          <div className="mt-4">
+            <button 
+              onClick={handleSignOut}
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-all"
+            >
+              <LogOut size={20} />
+              <span className="font-medium">Sign Out</span>
+            </button>
+          </div>
 
           {/* Footer */}
-          <div className="mt-auto pt-6 border-t border-white/20">
+          <div className="mt-6 pt-6 border-t border-white/20">
             <p className="text-white/50 text-xs text-center">
               © 2024 benpstokerbeats<br />
               Contact: benpstokerbeats@icloud.com
